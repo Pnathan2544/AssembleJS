@@ -1,41 +1,21 @@
 # syntax=docker/dockerfile:1
 # ---------------------------------------------------------------------------
-# apps/web/Dockerfile  –  multi-stage React build
-# Stages: web-base → deps → builder → runtime (nginx)
+# apps/web/Dockerfile  –  Vite dev server (development only)
+# Production assets are built inside docker/nginx/Dockerfile as a stage.
 # ---------------------------------------------------------------------------
 
-# ── Stage 1: shared build base ───────────────────────────────────────────────
 FROM node-web-base AS web-base
-# Inherits non-root user, node 20-alpine, corepack
 
-# ── Stage 2: dependency layer (cache-friendly) ───────────────────────────────
-FROM web-base AS deps
-# Copy manifests first so this layer is only invalidated when deps change
 COPY --chown=appuser:appgroup apps/web/package*.json ./
 RUN npm ci --prefer-offline
 
-# ── Stage 3: builder ─────────────────────────────────────────────────────────
-FROM deps AS builder
-ARG BUILD_MODE=production
-ENV NODE_ENV=${BUILD_MODE}
-
 COPY --chown=appuser:appgroup apps/web/ ./
-RUN npm run build
 
-# ── Stage 4: runtime – nginx serves the static bundle ───────────────────────
-FROM nginx:1.27-alpine AS runtime
+USER appuser
 
-LABEL org.opencontainers.image.description="NodeMesh web – static assets"
+EXPOSE 5173
 
-# Remove default config; our own is injected via Compose / nginx image
-RUN rm /etc/nginx/conf.d/default.conf
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+    CMD wget -qO- http://localhost:5173/ || exit 1
 
-# Copy the compiled assets from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Non-root nginx: nginx master runs as root to bind :80, but workers run as
-# the default 'nginx' user already set in the upstream image.
-EXPOSE 80
-
-HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:80/ || exit 1
+CMD ["npm", "run", "dev"]

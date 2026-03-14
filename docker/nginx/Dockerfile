@@ -1,19 +1,39 @@
 # syntax=docker/dockerfile:1
 # ---------------------------------------------------------------------------
-# docker/nginx/Dockerfile  –  public ingress
-# Bundles config only; static web assets are copied in from web build stage
-# via the Compose build or a shared volume.
+# docker/nginx/Dockerfile  –  public ingress + static asset server
+#
+# Multi-stage:
+#   web-deps    install React dependencies (cache layer)
+#   web-builder build React bundle
+#   runtime     nginx with proxy config + compiled assets
 # ---------------------------------------------------------------------------
-FROM nginx:1.27-alpine
 
-LABEL org.opencontainers.image.description="NodeMesh Nginx ingress"
+# ── Stage 1: web dependency layer ────────────────────────────────────────────
+FROM node-web-base AS web-deps
+COPY apps/web/package*.json ./
+RUN npm ci --prefer-offline
 
-# Remove default site
+# ── Stage 2: React build ─────────────────────────────────────────────────────
+FROM web-deps AS web-builder
+ARG BUILD_MODE=production
+ENV NODE_ENV=${BUILD_MODE}
+COPY apps/web/ ./
+RUN npm run build
+
+# ── Stage 3: nginx runtime ───────────────────────────────────────────────────
+FROM nginx:1.27-alpine AS runtime
+
+LABEL org.opencontainers.image.description="NodeMesh nginx ingress"
+
+# Remove default site config
 RUN rm -f /etc/nginx/conf.d/default.conf
 
-# Copy our configs
-COPY docker/nginx/nginx.conf      /etc/nginx/nginx.conf
-COPY docker/nginx/conf.d/         /etc/nginx/conf.d/
+# Web assets from build stage
+COPY --from=web-builder /app/dist /usr/share/nginx/html
+
+# Nginx configuration
+COPY docker/nginx/nginx.conf  /etc/nginx/nginx.conf
+COPY docker/nginx/conf.d/     /etc/nginx/conf.d/
 
 EXPOSE 80 443
 
