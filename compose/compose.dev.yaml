@@ -1,0 +1,56 @@
+# compose/compose.dev.yaml
+# ---------------------------------------------------------------------------
+# Development overlay.
+# Usage: docker compose -f compose/compose.yaml -f compose/compose.dev.yaml up
+# Or via Makefile: make dev
+# ---------------------------------------------------------------------------
+
+services:
+
+  mongo:
+    # Expose port for local DB GUI tools (e.g. Compass)
+    ports:
+      - "27017:27017"
+
+  redis:
+    # Expose port for redis-cli / RedisInsight locally
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      args:
+        NODE_ENV: development
+    environment:
+      NODE_ENV: development
+    # Hot reload via nodemon
+    command: ["node_modules/.bin/nodemon", "src/app.js"]
+    volumes:
+      # Bind-mount source for hot reload (override deps with container's copy)
+      - ../apps/api/src:/app/src:ro
+    ports:
+      - "3000:3000"  # direct API access for debugging/Postman
+    # More verbose logging in dev
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  web:
+    # In dev, run vite dev server instead of building static bundle
+    command: ["npm", "run", "dev"]
+    volumes:
+      - ../apps/web/src:/app/src:ro
+      - ../apps/web/index.html:/app/index.html:ro
+      - ../apps/web/vite.config.js:/app/vite.config.js:ro
+    ports:
+      - "5173:5173"  # direct Vite access
+    environment:
+      NODE_ENV: development
+
+  nginx:
+    # In dev, expose both 80 and a debug port; config can be overridden
+    volumes:
+      # Allow iterating on nginx config without rebuild
+      - ../docker/nginx/conf.d:/etc/nginx/conf.d:ro

@@ -1,0 +1,35 @@
+# compose/compose.prodlike.yaml
+# ---------------------------------------------------------------------------
+# Production-like overlay.
+# Usage: docker compose -f compose/compose.yaml -f compose/compose.prodlike.yaml up
+# Or via Makefile: make prod
+# ---------------------------------------------------------------------------
+
+services:
+
+  mongo:
+    restart: always
+    # No host-published ports
+
+  redis:
+    restart: always
+
+  api:
+    restart: always
+    environment:
+      NODE_ENV: production
+    # No direct port exposure; all traffic through nginx
+
+  web:
+    # Static build only – nginx serves the artifacts
+    restart: "no"
+
+  nginx:
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    # For TLS in prod-like mode, mount generated certs:
+    # volumes:
+    #   - ./certs/server.crt:/run/secrets/tls_cert:ro
+    #   - ./certs/server.key:/run/secrets/tls_key:ro

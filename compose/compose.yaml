@@ -1,0 +1,187 @@
+# compose/compose.yaml
+# ---------------------------------------------------------------------------
+# Base Compose file – environment-agnostic definitions.
+# Apply overlays via: docker compose -f compose/compose.yaml -f compose/compose.dev.yaml up
+# ---------------------------------------------------------------------------
+
+name: nodemesh
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+secrets:
+  mongo_root_username:
+    file: ../secrets/mongo_root_username.txt
+  mongo_root_password:
+    file: ../secrets/mongo_root_password.txt
+  mongo_app_username:
+    file: ../secrets/mongo_app_username.txt
+  mongo_app_password:
+    file: ../secrets/mongo_app_password.txt
+  redis_password:
+    file: ../secrets/redis_password.txt
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  mongo_data:
+  redis_data:
+  nginx_logs:
+
+# ── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  edge:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true   # no direct internet access from backend containers
+
+# ── Services ─────────────────────────────────────────────────────────────────
+services:
+
+  # ── mongo ──────────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    networks:
+      - backend
+    volumes:
+      - mongo_data:/data/db
+      - ../docker/mongo/init:/docker-entrypoint-initdb.d:ro
+    secrets:
+      - mongo_root_username
+      - mongo_root_password
+      - mongo_app_username
+      - mongo_app_password
+    environment:
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
+      MONGO_DB: nodemesh
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    networks:
+      - backend
+    volumes:
+      - redis_data:/data
+    secrets:
+      - redis_password
+    command: >
+      sh -c "redis-server
+        --requirepass $$(cat /run/secrets/redis_password)
+        --appendonly yes
+        --appendfsync everysec
+        --save 60 1"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "$(cat /run/secrets/redis_password)", "ping"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── api ────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      additional_contexts:
+        - node-api-base=docker-image://node-api-base:local
+    restart: unless-stopped
+    networks:
+      - backend
+    secrets:
+      - mongo_app_username
+      - mongo_app_password
+      - redis_password
+    environment:
+      NODE_ENV:    production
+      PORT:        "3000"
+      MONGO_HOST:  mongo
+      MONGO_PORT:  "27017"
+      MONGO_DB:    nodemesh
+      REDIS_HOST:  redis
+      REDIS_PORT:  "6379"
+      CACHE_TTL_SECONDS: "60"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── web (build stage; runtime assets copied to nginx) ─────────────────────
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      additional_contexts:
+        - node-web-base=docker-image://node-web-base:local
+      args:
+        BUILD_MODE: production
+    # web is a static-asset service; nginx serves the bundle.
+    # In prod-like mode this container exits after build – it's the nginx
+    # service that actually serves. In dev override, vite dev server runs.
+    restart: "no"
+    networks:
+      - edge
+    logging:
+      driver: local
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # ── nginx ──────────────────────────────────────────────────────────────────
+  nginx:
+    build:
+      context: ..
+      dockerfile: docker/nginx/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - edge
+      - backend
+    volumes:
+      - nginx_logs:/var/log/nginx
+      # Static assets from web build are copied into nginx image at build time;
+      # no runtime volume needed for prod-like mode.
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/healthz"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,43 @@
+# .dockerignore – applied to the build context (repo root)
+# Keep it aggressive: smaller context = faster builds and no accidental leaks.
+
+# Version control
+.git
+.gitignore
+
+# Node deps (re-installed inside image)
+**/node_modules
+**/.npm
+
+# Build output (rebuilt inside image)
+apps/web/dist
+apps/web/.vite
+
+# Local dev overrides
+*.local
+*.dev
+.env
+.env.*
+!.env.example
+
+# Secrets must NEVER enter the build context
+secrets/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+**/.idea
+**/.vscode
+**/*.swp
+**/*.swo
+
+# Test artifacts
+**/coverage
+**/__tests__
+**/*.test.*
+**/*.spec.*
+
+# Docs / CI (not needed at runtime)
+README.md
+Makefile
+.github

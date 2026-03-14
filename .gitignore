@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.npm/
+
+# Build artifacts
+apps/web/dist/
+apps/web/.vite/
+
+# Secrets – NEVER commit actual secret values
+# The placeholder files are committed for bootstrapping;
+# in real deployments replace them or use a secrets manager.
+# secrets/*.txt  ← keep commented so placeholders ARE tracked for new devs
+
+# Environment overrides
+.env
+.env.*
+!.env.example
+
+# Docker
+*.log
+
+# Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Coverage
+coverage/
