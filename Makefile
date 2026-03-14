@@ -5,7 +5,7 @@ COMPOSE_BASE  := docker compose -f compose/compose.yaml
 COMPOSE_DEV   := $(COMPOSE_BASE) -f compose/compose.dev.yaml
 COMPOSE_PROD  := $(COMPOSE_BASE) -f compose/compose.prodlike.yaml
 
-.PHONY: help bases dev prod down logs ps clean nuke
+.PHONY: help bases check dev prod down logs ps shell clean nuke
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -15,6 +15,13 @@ help: ## Show this help
 bases: ## Build custom base images locally
 	docker build -t node-web-base:local -f docker/base/node-web-base.Dockerfile .
 	docker build -t node-api-base:local -f docker/base/node-api-base.Dockerfile .
+
+# ── Validation ────────────────────────────────────────────────────────────────
+check: ## Quick smoke test: health + version endpoints
+	@curl -sf http://localhost/api/health | python3 -m json.tool || \
+	  curl -sf http://localhost/api/health
+	@curl -sf http://localhost/api/version | python3 -m json.tool || \
+	  curl -sf http://localhost/api/version
 
 # ── Stack targets ─────────────────────────────────────────────────────────────
 dev: bases ## Start the full stack in dev mode (hot reload, ports exposed)
@@ -41,6 +48,9 @@ logs-%: ## Tail logs for a specific service: make logs-api
 
 ps: ## Show running containers
 	$(COMPOSE_BASE) ps
+
+shell-%: ## Open a shell in a running service: make shell-api
+	$(COMPOSE_BASE) exec $* sh
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 clean: ## Remove stopped containers and dangling images
