@@ -61,7 +61,7 @@ services:
         node-web-base: docker-image://node-web-base:local
     # Bind-mount nginx config so you can iterate without rebuilding
     volumes:
-      - ../docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ../docker/nginx/conf.d:/etc/nginx/conf.d
       - nginx_logs:/var/log/nginx
     logging:
       driver: json-file
