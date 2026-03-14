@@ -27,8 +27,9 @@ FROM nginx:1.27-alpine AS runtime
 
 LABEL org.opencontainers.image.description="NodeMesh nginx ingress"
 
-# Remove default site config
-RUN rm -f /etc/nginx/conf.d/default.conf
+# curl for healthcheck (wget is not guaranteed in all nginx:alpine builds)
+RUN apk add --no-cache curl \
+    && rm -f /etc/nginx/conf.d/default.conf
 
 # Web assets from build stage
 COPY --from=web-builder /app/dist /usr/share/nginx/html
@@ -40,4 +41,4 @@ COPY docker/nginx/conf.d/     /etc/nginx/conf.d/
 EXPOSE 80 443
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:80/healthz || exit 1
+    CMD curl -sf http://localhost/healthz || exit 1

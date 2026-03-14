@@ -17,6 +17,6 @@ USER appuser
 EXPOSE 5173
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
-    CMD wget -qO- http://localhost:5173/ || exit 1
+    CMD wget -q --spider http://localhost:5173/ || exit 1
 
 CMD ["npm", "run", "dev"]
