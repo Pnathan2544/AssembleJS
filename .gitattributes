@@ -1,0 +1,24 @@
+# Force LF line endings for files that run inside Linux containers.
+# Without this, Git on Windows will check out with CRLF which breaks shebangs.
+
+# Shell scripts – always LF
+*.sh        text eol=lf
+
+# Dockerfiles – always LF
+Dockerfile  text eol=lf
+*.Dockerfile text eol=lf
+
+# Nginx config – always LF
+*.conf      text eol=lf
+
+# Compose files – always LF
+*.yaml      text eol=lf
+*.yml       text eol=lf
+
+# JS / JSON / everything else – auto (platform line endings in editor, LF in repo)
+*.js        text
+*.jsx       text
+*.json      text
+*.md        text
+*.css       text
+*.html      text

@@ -1,56 +1,70 @@
 # compose/compose.dev.yaml
 # ---------------------------------------------------------------------------
 # Development overlay.
-# Usage: docker compose -f compose/compose.yaml -f compose/compose.dev.yaml up
-# Or via Makefile: make dev
+# Usage (from repo root):
+#   docker compose -f compose/compose.yaml -f compose/compose.dev.yaml up --build
+# Or: make dev
 # ---------------------------------------------------------------------------
 
 services:
 
   mongo:
-    # Expose port for local DB GUI tools (e.g. Compass)
+    # Expose for local DB GUI tools (Compass, DataGrip, etc.)
     ports:
       - "27017:27017"
 
   redis:
-    # Expose port for redis-cli / RedisInsight locally
+    # Expose for redis-cli / RedisInsight
     ports:
       - "6379:6379"
 
   api:
     build:
-      args:
-        NODE_ENV: development
+      additional_contexts:
+        node-api-base: docker-image://node-api-base:local
     environment:
       NODE_ENV: development
     # Hot reload via nodemon
-    command: ["node_modules/.bin/nodemon", "src/app.js"]
+    command: ["node_modules/.bin/nodemon", "--watch", "src", "src/app.js"]
     volumes:
-      # Bind-mount source for hot reload (override deps with container's copy)
+      # Bind-mount source for hot reload
       - ../apps/api/src:/app/src:ro
     ports:
-      - "3000:3000"  # direct API access for debugging/Postman
-    # More verbose logging in dev
+      - "3000:3000"
     logging:
       driver: json-file
       options:
         max-size: "5m"
         max-file: "2"
 
+  # Vite dev server – hot reload for React (dev mode only)
   web:
-    # In dev, run vite dev server instead of building static bundle
-    command: ["npm", "run", "dev"]
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      additional_contexts:
+        node-web-base: docker-image://node-web-base:local
+    environment:
+      NODE_ENV: development
     volumes:
       - ../apps/web/src:/app/src:ro
       - ../apps/web/index.html:/app/index.html:ro
       - ../apps/web/vite.config.js:/app/vite.config.js:ro
     ports:
-      - "5173:5173"  # direct Vite access
-    environment:
-      NODE_ENV: development
+      - "5173:5173"
+    networks:
+      - edge
 
   nginx:
-    # In dev, expose both 80 and a debug port; config can be overridden
+    build:
+      additional_contexts:
+        node-web-base: docker-image://node-web-base:local
+    # Bind-mount nginx config so you can iterate without rebuilding
     volumes:
-      # Allow iterating on nginx config without rebuild
       - ../docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_logs:/var/log/nginx
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"

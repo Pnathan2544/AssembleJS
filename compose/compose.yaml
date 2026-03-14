@@ -1,7 +1,9 @@
 # compose/compose.yaml
 # ---------------------------------------------------------------------------
 # Base Compose file – environment-agnostic definitions.
-# Apply overlays via: docker compose -f compose/compose.yaml -f compose/compose.dev.yaml up
+# Usage:
+#   dev:      docker compose -f compose/compose.yaml -f compose/compose.dev.yaml up --build
+#   prodlike: docker compose -f compose/compose.yaml -f compose/compose.prodlike.yaml up --build
 # ---------------------------------------------------------------------------
 
 name: nodemesh
@@ -83,7 +85,8 @@ services:
         --appendfsync everysec
         --save 60 1"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "$(cat /run/secrets/redis_password)", "ping"]
+      # CMD-SHELL so $(cat ...) is evaluated by /bin/sh inside the container
+      test: ["CMD-SHELL", "redis-cli -a $(cat /run/secrets/redis_password) ping | grep -q PONG"]
       interval: 15s
       timeout: 5s
       start_period: 10s
@@ -99,8 +102,9 @@ services:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
+      # additional_contexts must be a mapping (not a list)
       additional_contexts:
-        - node-api-base=docker-image://node-api-base:local
+        node-api-base: docker-image://node-api-base:local
     restart: unless-stopped
     networks:
       - backend
@@ -109,13 +113,13 @@ services:
       - mongo_app_password
       - redis_password
     environment:
-      NODE_ENV:    production
-      PORT:        "3000"
-      MONGO_HOST:  mongo
-      MONGO_PORT:  "27017"
-      MONGO_DB:    nodemesh
-      REDIS_HOST:  redis
-      REDIS_PORT:  "6379"
+      NODE_ENV:          production
+      PORT:              "3000"
+      MONGO_HOST:        mongo
+      MONGO_PORT:        "27017"
+      MONGO_DB:          nodemesh
+      REDIS_HOST:        redis
+      REDIS_PORT:        "6379"
       CACHE_TTL_SECONDS: "60"
     depends_on:
       mongo:
@@ -134,32 +138,17 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ── web (build stage; runtime assets copied to nginx) ─────────────────────
-  web:
-    build:
-      context: ..
-      dockerfile: apps/web/Dockerfile
-      additional_contexts:
-        - node-web-base=docker-image://node-web-base:local
-      args:
-        BUILD_MODE: production
-    # web is a static-asset service; nginx serves the bundle.
-    # In prod-like mode this container exits after build – it's the nginx
-    # service that actually serves. In dev override, vite dev server runs.
-    restart: "no"
-    networks:
-      - edge
-    logging:
-      driver: local
-      options:
-        max-size: "5m"
-        max-file: "2"
-
   # ── nginx ──────────────────────────────────────────────────────────────────
+  # Builds web assets internally (multi-stage) and serves them alongside the
+  # API proxy. This is the only service that publishes host ports.
   nginx:
     build:
       context: ..
       dockerfile: docker/nginx/Dockerfile
+      additional_contexts:
+        node-web-base: docker-image://node-web-base:local
+      args:
+        BUILD_MODE: production
     restart: unless-stopped
     ports:
       - "80:80"
@@ -169,8 +158,6 @@ services:
       - backend
     volumes:
       - nginx_logs:/var/log/nginx
-      # Static assets from web build are copied into nginx image at build time;
-      # no runtime volume needed for prod-like mode.
     depends_on:
       api:
         condition: service_healthy
