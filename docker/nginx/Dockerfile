@@ -11,7 +11,9 @@
 # ── Stage 1: web dependency layer ────────────────────────────────────────────
 FROM node-web-base AS web-deps
 COPY apps/web/package*.json ./
-RUN npm ci --prefer-offline
+# NODE_ENV=production (inherited from base) causes npm to skip devDependencies.
+# Override for the install step so vite and other build tools are included.
+RUN NODE_ENV=development npm ci --prefer-offline
 
 # ── Stage 2: React build ─────────────────────────────────────────────────────
 FROM web-deps AS web-builder

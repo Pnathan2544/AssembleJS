@@ -7,7 +7,7 @@
 FROM node-web-base AS web-base
 
 COPY --chown=appuser:appgroup apps/web/package*.json ./
-RUN npm ci --prefer-offline
+RUN NODE_ENV=development npm ci --prefer-offline
 
 COPY --chown=appuser:appgroup apps/web/ ./
 
