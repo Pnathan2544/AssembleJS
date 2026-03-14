@@ -24,8 +24,8 @@ services:
         node-api-base: docker-image://node-api-base:local
     environment:
       NODE_ENV: development
-    # Hot reload via nodemon
-    command: ["node_modules/.bin/nodemon", "--watch", "src", "src/app.js"]
+    # Hot reload via Node's built-in --watch (Node 18+, no devDependency needed)
+    command: ["node", "--watch", "src/app.js"]
     volumes:
       # Bind-mount source for hot reload
       - ../apps/api/src:/app/src:ro
