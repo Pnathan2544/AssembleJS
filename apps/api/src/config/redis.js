@@ -22,7 +22,6 @@ function getClient() {
     password,
     maxRetriesPerRequest: 3,
     connectTimeout: 5000,
-    lazyConnect: true,
   })
 
   client.on('connect', () => console.log(`[redis] Connected to ${host}:${port}`))

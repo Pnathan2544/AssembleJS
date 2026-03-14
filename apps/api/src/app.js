@@ -39,7 +39,8 @@ app.use(errorHandler)
 async function start() {
   try {
     await db.connect()
-    await redis.getClient().connect()
+    // ioredis connects lazily; ping here to fail fast on startup
+    await redis.getClient().ping()
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`[api] Listening on :${PORT}`)
     })
