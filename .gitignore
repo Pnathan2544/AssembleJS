@@ -6,10 +6,10 @@ node_modules/
 apps/web/dist/
 apps/web/.vite/
 
-# Secrets – NEVER commit actual secret values
-# The placeholder files are committed for bootstrapping;
-# in real deployments replace them or use a secrets manager.
-# secrets/*.txt  ← keep commented so placeholders ARE tracked for new devs
+# Secrets - NEVER commit actual secret values
+secrets/*.txt
+!secrets/*.example
+!secrets/README.md
 
 # Environment overrides
 .env
